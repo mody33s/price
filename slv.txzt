@@ -1,0 +1,108 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+-- الريموت المعدل حق الطلق
+local shootRemote = ReplicatedStorage:WaitForChild("RemoteEvent_Shoot") -- غير الاسم حسب ريموتك
+
+-- === إنشاء الدرون ===
+local drone = Instance.new("Part")
+drone.Size = Vector3.new(4, 1, 4)
+drone.Anchored = true
+drone.CanCollide = false
+drone.Transparency = 0.5
+drone.Color = Color3.fromRGB(255, 255, 0)
+drone.Name = "Drone"
+drone.CFrame = player.Character.HumanoidRootPart.CFrame + Vector3.new(0, 10, 0)
+drone.Parent = workspace
+
+-- الكاميرا تتابع الدرون
+local camera = workspace.CurrentCamera
+camera.CameraSubject = drone
+camera.CameraType = Enum.CameraType.Custom
+
+-- === GUI ===
+local gui = Instance.new("ScreenGui")
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local function createButton(text, pos, callback)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 70, 0, 40)
+	btn.Position = pos
+	btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+	btn.Text = text
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 14
+	btn.AutoButtonColor = true
+	btn.Parent = gui
+	btn.MouseButton1Click:Connect(callback)
+	return btn
+end
+
+-- تحريك الدرون
+local speed = 1
+local dir = Vector3.new(0,0,0)
+
+RunService.RenderStepped:Connect(function()
+	local cf = camera.CFrame
+	local forward = cf.LookVector
+	local right = cf.RightVector
+	local move = (right * dir.X) + (forward * dir.Z) + (Vector3.new(0,1,0)*dir.Y)
+	drone.CFrame = drone.CFrame + move * speed
+end)
+
+local function setDir(x,y,z)
+	dir = Vector3.new(x,y,z)
+end
+
+createButton("↑", UDim2.new(0.45,0,0.8,0), function() setDir(0,0,1) end)
+createButton("↓", UDim2.new(0.45,0,0.9,0), function() setDir(0,0,-1) end)
+createButton("→", UDim2.new(0.52,0,0.85,0), function() setDir(1,0,0) end)
+createButton("←", UDim2.new(0.38,0,0.85,0), function() setDir(-1,0,0) end)
+createButton("▲", UDim2.new(0.6,0,0.8,0), function() setDir(0,1,0) end)
+createButton("▼", UDim2.new(0.6,0,0.9,0), function() setDir(0,-1,0) end)
+
+-- === إطلاق النار ===
+local firing = false
+local spam = false
+local holdStart = 0
+
+local shootBtn = createButton("🔴 إطلاق", UDim2.new(0.45,0,0.7,0), function()
+	if spam then
+		spam = false
+		return
+	end
+	shootRemote:FireServer(drone.Position) -- يرسل مكان الدرون مثلا
+end)
+
+-- سبام عند الضغط الطويل
+shootBtn.MouseButton1Down:Connect(function()
+	holdStart = tick()
+	firing = true
+	while firing do
+		if tick() - holdStart > 0.5 then
+			spam = true
+		end
+		if spam then
+			shootRemote:FireServer(drone.Position)
+			task.wait(0.1)
+		else
+			task.wait()
+		end
+	end
+end)
+
+shootBtn.MouseButton1Up:Connect(function()
+	firing = false
+end)
+
+-- زر تثبيت الإطلاق
+local toggleBtn = createButton("🔒 تثبيت", UDim2.new(0.6,0,0.7,0), function()
+	spam = not spam
+end)
